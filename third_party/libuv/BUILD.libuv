@@ -1,0 +1,35 @@
+load("@rules_foreign_cc//foreign_cc:configure.bzl", "configure_make")
+
+config_setting(
+    name = "platform_linux",
+    constraint_values = [
+        "@bazel_tools//platforms:linux",
+    ],
+)
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)
+
+configure_make(
+    name = "libuv",
+    autogen = True,
+    env = select({
+        "//conditions:default": {},
+    }),
+    configure_in_place = True,
+    lib_source = "@libuv//:all",
+    linkopts = select({
+        ":platform_linux": [
+            "-pthread",
+            "-ldl",
+        ],
+        "//conditions:default": [
+            "-pthread",
+        ],
+    }),
+    out_lib_dir = "lib",
+    visibility = ["//visibility:public"],
+)
