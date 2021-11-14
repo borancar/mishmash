@@ -1,7 +1,7 @@
 # Mishmash
 
-Mismash is a demo project demonstrating fat packages, with binaries built for
-different architectures coming from a single build.
+Mismash is a demo Bazel project demonstrating fat packages, with binaries built
+for different architectures coming from a single build.
 
 Uses https://github.com/crosstool-ng/crosstool-ng (latest master) to prepare
 toolchains:
