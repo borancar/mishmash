@@ -35,6 +35,7 @@ pkg_files(
         ":server_myplatform1",
     ],
     prefix = "/myplatform1",
+    attributes = pkg_attributes("0755"),
 )
 
 pkg_files(
@@ -43,6 +44,7 @@ pkg_files(
         ":server_myplatform2",
     ],
     prefix = "/myplatform2",
+    attributes = pkg_attributes("0755"),
 )
 
 pkg_files(
@@ -51,6 +53,7 @@ pkg_files(
         ":server_myplatform3",
     ],
     prefix = "/myplatform3",
+    attributes = pkg_attributes("0755"),
 )
 
 pkg_tar(
