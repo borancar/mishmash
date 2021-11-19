@@ -34,6 +34,29 @@ bazel-out/aarch64-fastbuild-ST-7ccd83c6a482/bin/server/server
 bazel-out/ppc-fastbuild-ST-a9533f43d935/bin/server/server
 ```
 
+## Packaging
+
+To build a distributable package use:
+
+```
+bazel build --crosstool_top=//multi_arch:legacy_selector //server:package
+```
+
+This will result in `bazel-bin/server/package.tar` with the following contents:
+
+```
+$ tar -tf bazel-bin/server/package.tar
+./
+./myplatform1/
+./myplatform1/server
+./myplatform2/
+./myplatform2/server
+./myplatform3/
+./myplatform3/server
+```
+
+## Running
+
 You can use [QEMU User space
 emulator](https://www.qemu.org/docs/master/user/main.html) to launch these
 binaries, e.g.:
