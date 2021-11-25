@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+cp -a /nix/home/. ~/ 
+
+. ~/.nix-profile/etc/profile.d/nix.sh
+echo ". ~/.nix-profile/etc/profile.d/nix.sh" > ~/.bashrc
+
+nix-channel --remove nixpkgs
+nix-channel --add https://nixos.org/channels/nixos-21.05 nixpkgs
+nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs_unstable
+nix-channel --update
+
+#Install bazel 4.2.1  libtool 2.4.6 automake 1.16.3 bintools 2.3.5.1 gcc 10.3.0
+nix-env -iA nixpkgs.bazel_4 nixpkgs.automake nixpkgs.libtool nixpkgs.gcc
+nix-env --set-flag priority 0 gcc-wrapper
+nix-env -iA nixpkgs.bintoolsNoLibc nixpkgs.gnum4 nixpkgs.autoconf
