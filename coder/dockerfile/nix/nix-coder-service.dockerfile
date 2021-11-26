@@ -14,10 +14,15 @@ RUN chown -R 1000:1000 /tmp \
 
 COPY [ "coder/dockerfile/nix/dotfiles/configure", "/coder/configure" ]
 COPY [ "coder/dockerfile/nix/dotfiles/nix.conf", "/nix/config/nix.conf" ]
-RUN chmod 755 /coder/configure
+COPY [ "coder/dockerfile/nix/dotfiles/settings.json", "/tmp/settings.json" ]
+COPY [ "coder/dockerfile/nix/dotfiles/vs-code.extensions", "/tmp/vs-code.extensions" ]
+RUN chmod 755 /coder/configure \
+    && chmod 755 /tmp/settings.json
 
 USER coder
 ENV NIX_CONF_DIR=/nix/config
+ENV EXTENSIONS_GALLERY='{"serviceUrl": "https://open-vsx.org/api"}'
+
 RUN curl -L https://releases.nixos.org/nix/nix-2.3.15/install | sh \
     && mkdir /nix/home \
     && cp -a /home/coder/. /nix/home

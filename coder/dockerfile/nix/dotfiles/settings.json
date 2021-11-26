@@ -1,0 +1,27 @@
+{
+    "cmake": {
+      "configureOnOpen": false
+    },
+    "editor": {
+      "fontFamily": "'JetbrainsMono Nerd Font', 'monospace', monospace, 'Droid Sans Fallback'",
+      "fontLigatures": true,
+      "tabSize": 2,
+      "insertSpaces": true
+    },
+    "python": {
+      "formatting": {
+        "provider": "black"
+      }
+    },
+    "update": {
+      "mode": "none"
+    },
+    "window": {
+      "zoomLevel": 1
+    },
+    "workbench": {
+      "colorTheme": "GitHub Dark",
+      "iconTheme": "eq-material-theme-icons-darker"
+    }
+  }
+  
