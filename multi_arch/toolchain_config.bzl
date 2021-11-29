@@ -103,15 +103,16 @@ cc_toolchain_config = rule(
     provides = [CcToolchainConfigInfo],
 )
 
-def x_tools_toolchain(prefix):
-    files = "%s-files" % prefix
+def x_tools_toolchain(name, prefix, compatible_with):
+    files = "%s_files" % prefix
+    config = "%s_config" % prefix
 
     native.filegroup(
         name = files
     )
 
     cc_toolchain_config(
-        name = "%s-config" % prefix,
+        name = config,
         prefix = prefix,
     )
 
@@ -124,5 +125,12 @@ def x_tools_toolchain(prefix):
         linker_files = files,
         objcopy_files = files,
         strip_files = files,
-        toolchain_config = ":%s-config" % prefix,
+        toolchain_config = config,
+    )
+
+    native.toolchain(
+        name = name,
+        target_compatible_with = compatible_with,
+        toolchain = prefix,
+        toolchain_type = "@bazel_tools//tools/cpp:toolchain_type"
     )

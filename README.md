@@ -22,24 +22,10 @@ make
 This should put the tools under `~/x-tools`. Make sure to change
 `multi_arch/toolchain_config.bzl:19`.
 
-```
-bazel build --crosstool_top=//multi_arch:legacy_selector //server/...
-```
-
-This should result in multiple targets built under bazel-out:
-```
-$ find bazel-out/ -type f -name server                                                                                                                                                                                                                   22:22
-bazel-out/k8-fastbuild/bin/server/server
-bazel-out/aarch64-fastbuild-ST-7ccd83c6a482/bin/server/server
-bazel-out/ppc-fastbuild-ST-a9533f43d935/bin/server/server
-```
-
-## Packaging
-
 To build a distributable package use:
 
 ```
-bazel build --crosstool_top=//multi_arch:legacy_selector //server:package
+bazel build //server:package
 ```
 
 This will result in `bazel-bin/server/package.tar` with the following contents:
@@ -61,7 +47,8 @@ You can use [QEMU User space
 emulator](https://www.qemu.org/docs/master/user/main.html) to launch these
 binaries, e.g.:
 ```
-qemu-aarch64-static bazel-out/aarch64-fastbuild-ST-7ccd83c6a482/bin/server/server
+tar -xvf bazel-bin/server/package.tar
+qemu-aarch64-static mishmash2/server
 ```
 
 Interacting with the server is then a case of:
