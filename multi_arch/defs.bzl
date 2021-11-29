@@ -8,18 +8,18 @@ def _impl(ctx):
     ]
  
 def _transition_impl(settings, attr):
-    return {"//command_line_option:cpu": attr.cpu}
+    return {"//command_line_option:platforms": attr.platform}
  
 _comp_mode_transition = transition(
     implementation = _transition_impl,
     inputs = [],
-    outputs = ["//command_line_option:cpu"],
+    outputs = ["//command_line_option:platforms"],
 )
  
 multi_arch_rule = rule(
     implementation = _impl,
     attrs = {
-        "cpu": attr.string(),
+        "platform": attr.string(),
         "actual_binary": attr.label(cfg = _comp_mode_transition),
         "_allowlist_function_transition": attr.label(
              default = "@bazel_tools//tools/allowlists/function_transition_allowlist"
