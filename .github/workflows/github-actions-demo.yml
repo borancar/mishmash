@@ -1,0 +1,18 @@
+name: GitHub Actions Demo
+on: [push]
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2.4.0
+    # Setup worker env for build, get build tools etc
+    - uses: cachix/install-nix-action@v15
+      with:
+        nix_path: nixpkgs=channel:nixos-21.05
+    - run: |
+        nix-env -iA bazel_4 automake libtool gcc -f '<nixpkgs>'
+        nix-env --set-flag priority 0 gcc-wrapper
+        nix-env -iA bintoolsNoLibc gnum4 autoconf -f '<nixpkgs>'
+    # Run a build
+    - run: |
+        bazel build //server:server

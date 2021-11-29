@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+# Copy home (due to coder purging home when first started)
+cp -a /nix/home/. ~/ 
+
+# Add nix "start" script to users ~/.bashrc
+. ~/.nix-profile/etc/profile.d/nix.sh
+echo ". ~/.nix-profile/etc/profile.d/nix.sh" > ~/.bashrc
+
+# Setup nix for 21.05 channel and unstable
+nix-channel --remove nixpkgs
+nix-channel --add https://nixos.org/channels/nixos-21.05 nixpkgs
+nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs_unstable
+nix-channel --update
+
+# Install bazel 4.2.1  libtool 2.4.6 automake 1.16.3 bintools 2.3.5.1 gcc 10.3.0
+nix-env -iA nixpkgs.bazel_4 nixpkgs.automake nixpkgs.libtool nixpkgs.gcc
+nix-env --set-flag priority 0 gcc-wrapper
+nix-env -iA nixpkgs.bintoolsNoLibc nixpkgs.gnum4 nixpkgs.autoconf
+
+# Check if there are existing settings
+if [ -f "/home/coder/.local/share/code-server/User/settings.json" ]
+then
+    echo "VS Code settings are already present. Remove with and run
+    /coder/configure to revert to defaults"
+else
+    mkdir -p /home/coder/.local/share/code-server/User/
+    cp /tmp/settings.json /home/coder/.local/share/code-server/User
+
+    # Install extensions
+    while read e; do
+        /var/tmp/coder/code-server/bin/code-server --install-extension "$e"
+    done </tmp/vs-code.extensions
+fi
