@@ -1,0 +1,126 @@
+ingress:
+  enabled: true
+  sslEnabled: true
+  httpHost: bazel.build.1e100.one
+  grpcHost: bazel-grpc.build.1e100.one
+
+mysql:
+  enabled: true
+  mysqlUser: "mysql-user"
+  mysqlPassword: <REDACTED>
+
+certmanager:
+  enabled: true
+  emailAddress: amckinney@qarik.com
+
+executor:
+  enabled: true
+  replicas: 3
+  resources:
+    requests:
+      cpu: "7000m"
+      memory: 20Gi
+    limits:
+      cpu: "7500m"
+      memory: 30Gi
+redis:
+  enabled: true
+
+extraVolumes:
+  - name: gcs-credentials
+    secret:
+      secretName: gcs-credentials
+
+extraVolumeMounts:
+  - name: gcs-credentials
+    mountPath: /creds/
+    readOnly: true
+
+config:
+  integrations:
+    slack:
+      webhook_url: https://hooks.slack.com/services/<REDACTED>
+  app:
+    build_buddy_url: "https://bazel.build.1e100.one"
+    events_api_url: "grpcs://bazel-grpc.build.1e100.one"
+    cache_api_url: "grpcs://bazel-grpc.build.1e100.one"
+    remote_execution_api_url: "grpcs://bazel-grpc.build.1e100.one"
+  api:
+    enable_api: true
+  org:
+     name: Qarik
+     domain: qarik.com
+  ssl:
+    enable_ssl: true
+  remote_execution:
+    enable_remote_exec: true
+  cache:
+    gcs:
+      bucket: "buildbuddy_blobs"
+      project_id: <REDACTED>
+      credentials_file: "/creds/creds.json"
+      ttl_days: 30
+  auth:
+    oauth_providers:
+      - issuer_url: "https://accounts.google.com"
+        client_id: <REDACTED>
+        client_secret: <REDACTED>
+
+  github:
+    client_id: <REDACTED>
+    client_secret: <REDACTED>
+
+prometheus:
+  enabled: true
+
+prometheus-adapter:
+  prometheus:
+    url: http://{{ .Release.Name }}-prometheus-server
+    port: 80
+  rules:
+    default: false
+    custom:
+      - seriesQuery: 'buildbuddy_remote_execution_queue_length{kubernetes_pod_name!="",kubernetes_namespace!=""}'
+        resources:
+          overrides:
+            kubernetes_namespace: { resource: "namespace" }
+            kubernetes_pod_name: { resource: "pod" }
+        metricsQuery: sum (<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>) 
+        name:
+          matches: "^(.*)$"
+          as: "${1}"
+
+grafana:
+  enabled: true
+  grafana.ini:
+    server:
+      domain: "{{ .Values.ingress.httpHost }}"
+      root_url: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
+      serve_from_sub_path: true
+      cookie_secure: false
+    dashboards:
+      default_home_dashboard_path: /var/lib/grafana/dashboards/default/buildbuddy-dashboard.json
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: true
+          editable: false
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboardsConfigMaps:
+    default: buildbuddy-dashboard
+  datasources:
+   datasources.yaml:
+     apiVersion: 1
+     datasources:
+     - name: Prometheus
+       type: prometheus
+       uid: prom
+       url: http://{{ .Release.Name }}-prometheus-server
+       access: proxy
+       isDefault: true
