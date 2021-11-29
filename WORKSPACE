@@ -18,6 +18,7 @@ http_archive(
 )
 load("@rules_cc//cc:repositories.bzl", "rules_cc_dependencies", "rules_cc_toolchains")
 rules_cc_dependencies()
+rules_cc_toolchains()
 
 register_toolchains(
     "//multi_arch:linux_x86_64_toolchain",
