@@ -10,6 +10,7 @@ jobs:
       with:
         nix_path: nixpkgs=channel:nixos-21.05
     - run: |
+        nix-channel --list
         nix-env -iA nixpkgs.bazel_4 nixpkgs.automake nixpkgs.libtool nixpkgs.gcc
         nix-env --set-flag priority 0 gcc-wrapper
         nix-env -iA nixpkgs.bintoolsNoLibc nixpkgs.gnum4 nixpkgs.autoconf
