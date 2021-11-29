@@ -19,6 +19,14 @@ http_archive(
 load("@rules_cc//cc:repositories.bzl", "rules_cc_dependencies", "rules_cc_toolchains")
 rules_cc_dependencies()
 
+register_toolchains(
+    "//multi_arch:linux_x86_64_toolchain",
+    "//multi_arch:linux_aarch64_toolchain",
+    "//multi_arch:linux_ppc64le_toolchain",
+)
+
+register_execution_platforms("//multi_arch:linux_x86_64")
+
 http_archive(
     name = "rules_foreign_cc",
     sha256 = "69023642d5781c68911beda769f91fcbc8ca48711db935a75da7f6536b65047f",
