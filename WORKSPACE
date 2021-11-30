@@ -18,13 +18,65 @@ http_archive(
 )
 load("@rules_cc//cc:repositories.bzl", "rules_cc_dependencies", "rules_cc_toolchains")
 rules_cc_dependencies()
-rules_cc_toolchains()
 
-register_toolchains(
-    "//multi_arch:linux_x86_64_toolchain",
-    "//multi_arch:linux_aarch64_toolchain",
-    "//multi_arch:linux_ppc64le_toolchain",
+http_archive(
+    name = "io_tweag_rules_nixpkgs",
+    strip_prefix = "rules_nixpkgs-075794009270b12986d3d840e4fc065a3aceba00",
+    urls = ["https://github.com/tweag/rules_nixpkgs/archive/075794009270b12986d3d840e4fc065a3aceba00.tar.gz"],
+    sha256 = "9b97f6cce67bd2a005089ca108358e9bbc24531794a9d1f8ca537470ee8ca2d1",
 )
+load("@io_tweag_rules_nixpkgs//nixpkgs:nixpkgs.bzl", "nixpkgs_cc_configure", "nixpkgs_git_repository")
+nixpkgs_git_repository(
+    name = "nixpkgs",
+    revision = "ad4db3f4d8ae54482c63c31c14921cb73953548d",
+)
+nixpkgs_cc_configure(
+    name = "nixpkgs_config_cc_linux_x86_64",
+    exec_constraints = [
+	"@platforms//os:linux",
+	"@platforms//cpu:x86_64",
+    ],
+    repository = "@nixpkgs",
+    target_constraints = [
+	"@platforms//os:linux",
+	"@platforms//cpu:x86_64",
+    ],
+)
+nixpkgs_cc_configure(
+    name = "nixpkgs_config_cc_linux_aarch64",
+    attribute_path = "cc-aarch64",
+    exec_constraints = [
+	"@platforms//os:linux",
+	"@platforms//cpu:x86_64",
+    ],
+    nix_file = "//:arm-cross.nix",
+    repository = "@nixpkgs",
+    target_constraints = [
+	"@platforms//os:linux",
+	"@platforms//cpu:aarch64",
+    ],
+)
+nixpkgs_cc_configure(
+    name = "nixpkgs_config_cc_linux_ppc64le",
+    attribute_path = "cc-ppc64le",
+    exec_constraints = [
+	"@platforms//os:linux",
+	"@platforms//cpu:x86_64",
+    ],
+    nix_file = "//:ppc-cross.nix",
+    repository = "@nixpkgs",
+    target_constraints = [
+	"@platforms//os:linux",
+	"@platforms//cpu:ppc",
+    ],
+)
+
+#rules_cc_toolchains()
+#register_toolchains(
+#    "//multi_arch:linux_x86_64_toolchain",
+#    "//multi_arch:linux_aarch64_toolchain",
+#    "//multi_arch:linux_ppc64le_toolchain",
+#)
 
 register_execution_platforms("//multi_arch:linux_x86_64")
 
