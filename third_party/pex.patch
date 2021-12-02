@@ -1,0 +1,455 @@
+diff --git a/examples/BUILD b/examples/BUILD
+index 3814730..cdff467 100644
+--- a/examples/BUILD
++++ b/examples/BUILD
+@@ -1,6 +1,11 @@
++load("//pex:pex_rules.bzl", "pex_binary", "pex_library", "pex_pytest")
++
+ pex_binary(
+     name = "foo",
+-    srcs = ["foo.py"],
++    srcs = [
++        "foo.py",
++	"__init__.py",
++    ],
+ )
+ 
+ pex_library(
+diff --git a/tools/build_rules/BUILD b/examples/__init__.py
+similarity index 100%
+rename from tools/build_rules/BUILD
+rename to examples/__init__.py
+diff --git a/pex/BUILD b/pex/BUILD
+index fff2cd8..a66c1de 100644
+--- a/pex/BUILD
++++ b/pex/BUILD
+@@ -26,11 +26,11 @@ genrule(
+         ln -sf "$$OUTDIR" "$$TMPF"
+         VENV="$${TMPF}/venv"
+ 
+-        $(location @virtualenv//:virtualenv) --no-download --quiet --clear "$$VENV"
++        $(location @virtualenv//:virtualenv) --no-download --clear "$$VENV"
+         PYTHON="$$VENV/bin/python"
+ 
+         $$VENV/bin/pip install pex \
+-            --quiet --no-cache-dir --no-index --build $(@D)/pexbuild \
++            --no-cache-dir --build $(@D)/pexbuild \
+             --find-links $$(dirname $(location @pex_src//file)) \
+             --find-links $$(dirname $(location @setuptools_src//file))
+ 
+@@ -40,7 +40,7 @@ genrule(
+ 
+         # Use the bootstrapped pex to build pex_wrapper.pex
+         $$VENV/bin/pex $(@D)/.pex_wrapper \
+-            --disable-cache --no-index -m pex_wrapper -o $@ \
++            --disable-cache -m pex_wrapper -o $@ \
+             --find-links $$(dirname $(location @pex_src//file)) \
+             --find-links $$(dirname $(location @setuptools_src//file)) \
+             --find-links $$(dirname $(location @requests_src//file)) \
+diff --git a/pex/pex_rules.bzl b/pex/pex_rules.bzl
+index 8e15ea9..c151e7c 100644
+--- a/pex/pex_rules.bzl
++++ b/pex/pex_rules.bzl
+@@ -46,40 +46,24 @@ Lastly, make sure that `tools/build_rules/BUILD` exists, even if it is empty,
+ so that Bazel can find your `prelude_bazel` file.
+ """
+ 
+-pex_file_types = FileType([".py"])
+-egg_file_types = FileType([".egg", ".whl"])
+-
+ # As much as I think this test file naming convention is a good thing, it's
+ # probably a bad idea to impose it as a policy to all OSS users of these rules,
+ # so I guess let's skip it.
+ #
+ # pex_test_file_types = FileType(["_unittest.py", "_test.py"])
+ 
++load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
+ 
+ def _collect_transitive_sources(ctx):
+-  source_files = set(order="compile")
+-  for dep in ctx.attr.deps:
+-    source_files += dep.py.transitive_sources
+-  source_files += pex_file_types.filter(ctx.files.srcs)
+-  return source_files
++  return depset(ctx.files.srcs, transitive=[depset(dep.py.transitive_sources) for dep in ctx.attr.deps], order="postorder")
+ 
+ 
+ def _collect_transitive_eggs(ctx):
+-  transitive_eggs = set(order="compile")
+-  for dep in ctx.attr.deps:
+-    if hasattr(dep.py, "transitive_eggs"):
+-      transitive_eggs += dep.py.transitive_eggs
+-  transitive_eggs += egg_file_types.filter(ctx.files.eggs)
+-  return transitive_eggs
++  return depset(ctx.files.eggs, transitive=[depset(dep.py.transitive_sources) for dep in ctx.attr.deps if hasattr(dep.py, "transitive_eggs")], order="postorder")
+ 
+ 
+ def _collect_transitive_reqs(ctx):
+-  transitive_reqs = set(order="compile")
+-  for dep in ctx.attr.deps:
+-    if hasattr(dep.py, "transitive_reqs"):
+-      transitive_reqs += dep.py.transitive_reqs
+-  transitive_reqs += ctx.attr.reqs
+-  return transitive_reqs
++  return depset(ctx.attr.reqs, transitive=[depset(dep.py.transitive_sources) for dep in ctx.attr.deps if hasattr(dep.py, "transitive_reqs")], order="postorder")
+ 
+ 
+ def _collect_transitive(ctx):
+@@ -94,15 +78,12 @@ def _collect_transitive(ctx):
+ 
+ 
+ def _pex_library_impl(ctx):
+-  transitive_files = set(ctx.files.srcs)
+-  for dep in ctx.attr.deps:
+-    transitive_files += dep.default_runfiles.files
+   return struct(
+-      files = set(),
++      files = depset(),
+       py = _collect_transitive(ctx),
+       runfiles = ctx.runfiles(
+           collect_default = True,
+-          transitive_files = set(transitive_files),
++          transitive_files = depset(ctx.files.srcs, transitive=[depset(dep.default_runfiles.files) for dep in ctx.attr.deps]),
+       )
+   )
+ 
+@@ -120,7 +101,7 @@ def _gen_manifest(py, runfiles):
+ 
+   pex_files = []
+ 
+-  for f in runfiles.files:
++  for f in runfiles.files.to_list():
+     dpath = f.short_path
+     if dpath.startswith("../"):
+       dpath = dpath[3:]
+@@ -133,13 +114,13 @@ def _gen_manifest(py, runfiles):
+ 
+   return struct(
+       modules = pex_files,
+-      requirements = list(py.transitive_reqs),
+-      prebuiltLibraries = [f.path for f in py.transitive_eggs],
++      requirements = py.transitive_reqs.to_list(),
++      prebuiltLibraries = [f.path for f in py.transitive_eggs.to_list()],
+   )
+ 
+ 
+ def _pex_binary_impl(ctx):
+-  transitive_files = set(ctx.files.srcs)
++  srcfiles = list(ctx.files.srcs)
+ 
+   if ctx.attr.entrypoint and ctx.file.main:
+     fail("Please specify either entrypoint or main, not both.")
+@@ -149,30 +130,29 @@ def _pex_binary_impl(ctx):
+   elif ctx.file.main:
+     main_file = ctx.file.main
+   else:
+-    main_file = pex_file_types.filter(ctx.files.srcs)[0]
++    main_file = ctx.files.srcs[0]
+   if main_file:
+     # Translate main_file's short path into a python module name
+     main_pkg = main_file.short_path.replace('/', '.')[:-3]
+-    transitive_files += [main_file]
+-
+-  deploy_pex = ctx.new_file(
+-      ctx.configuration.bin_dir, ctx.outputs.executable, '.pex')
++    srcfiles += [main_file]
+ 
+   py = _collect_transitive(ctx)
+ 
+-  for dep in ctx.attr.deps:
+-    transitive_files += dep.default_runfiles.files
+   runfiles = ctx.runfiles(
+       collect_default = True,
+-      transitive_files = transitive_files,
++      transitive_files = depset(srcfiles, transitive=[depset(dep.default_runfiles.files) for dep in ctx.attr.deps])
+   )
+ 
+-  manifest_file = ctx.new_file(
+-      ctx.configuration.bin_dir, deploy_pex, '_manifest')
++  deploy_pex = ctx.actions.declare_file(
++      ctx.outputs.executable.basename + '.pex', sibling=ctx.outputs.executable)
++
++  manifest_file = ctx.actions.declare_file(
++      ctx.outputs.executable.basename + '_manifest',
++      sibling=ctx.outputs.executable)
+ 
+   manifest = _gen_manifest(py, runfiles)
+ 
+-  ctx.file_action(
++  ctx.actions.write(
+       output = manifest_file,
+       content = manifest.to_json(),
+   )
+@@ -184,24 +164,23 @@ def _pex_binary_impl(ctx):
+   arguments += [] if ctx.attr.pex_use_wheels else ["--no-use-wheel"]
+   if ctx.attr.interpreter:
+     arguments += ["--python", ctx.attr.interpreter]
+-  for egg in py.transitive_eggs:
++  for egg in py.transitive_eggs.to_list():
+     arguments += ["--find-links", egg.dirname]
+   arguments += [
+       "--pex-root", ".pex",  # May be redundant since we also set PEX_ROOT
+       "--entry-point", main_pkg,
+       "--output-file", deploy_pex.path,
+-      "--cache-dir", ".pex/build",
+-      manifest_file.path,
++      "--manifest", manifest_file.path,
+   ]
+ 
+   # form the inputs to pex builder
+   _inputs = (
+       [manifest_file] +
+-      list(runfiles.files) +
+-      list(py.transitive_eggs)
++      runfiles.files.to_list() +
++      py.transitive_eggs.to_list()
+   )
+ 
+-  ctx.action(
++  ctx.actions.run(
+       mnemonic = "PexPython",
+       inputs = _inputs,
+       outputs = [deploy_pex],
+@@ -226,7 +205,7 @@ def _pex_binary_impl(ctx):
+   # There isn't much point in having both foo.pex and foo as identical pex
+   # files, but someone is probably relying on that behaviour by now so we might
+   # as well keep doing it.
+-  ctx.action(
++  ctx.actions.run_shell(
+       mnemonic = "LinkPex",
+       inputs = [deploy_pex],
+       outputs = [executable],
+@@ -237,7 +216,7 @@ def _pex_binary_impl(ctx):
+   )
+ 
+   return struct(
+-      files = set([executable]),  # Which files show up in cmdline output
++      files = depset([executable]),  # Which files show up in cmdline output
+       runfiles = runfiles,
+   )
+ 
+@@ -265,7 +244,7 @@ def _pex_pytest_impl(ctx):
+       executable = True,
+   )
+ 
+-  transitive_files = set(ctx.files.srcs + [test_runner])
++  transitive_files = depset(ctx.files.srcs + [test_runner])
+   for dep in ctx.attr.deps:
+     transitive_files += dep.default_runfiles
+ 
+@@ -280,14 +259,13 @@ def _pex_pytest_impl(ctx):
+ 
+ pex_attrs = {
+     "srcs": attr.label_list(flags = ["DIRECT_COMPILE_TIME_INPUT"],
+-                            allow_files = pex_file_types),
++                            allow_files = [".py"]),
+     "deps": attr.label_list(allow_files = False,
+                             providers = ["py"]),
+     "eggs": attr.label_list(flags = ["DIRECT_COMPILE_TIME_INPUT"],
+-                            allow_files = egg_file_types),
++                            allow_files = [".egg", ".whl"]),
+     "reqs": attr.string_list(),
+-    "data": attr.label_list(allow_files = True,
+-                            cfg = "data"),
++    "data": attr.label_list(allow_files = True),
+ 
+     # Used by pex_binary and pex_*test, not pex_library:
+     "_pexbuilder": attr.label(
+@@ -307,8 +285,7 @@ def _dmerge(a, b):
+ 
+ 
+ pex_bin_attrs = _dmerge(pex_attrs, {
+-    "main": attr.label(allow_files = True,
+-                       single_file = True),
++    "main": attr.label(allow_single_file = True),
+     "entrypoint": attr.string(),
+     "interpreter": attr.string(),
+     "pex_use_wheels": attr.bool(default=True),
+@@ -386,11 +363,10 @@ _pytest_pex_test = rule(
+         "runner": attr.label(
+             executable = True,
+             mandatory = True,
+-            cfg = "data",
++            cfg = "target",
+         ),
+         "launcher_template": attr.label(
+-            allow_files = True,
+-            single_file = True,
++            allow_single_file = True,
+             default = Label("//pex:testlauncher.sh.template"),
+         ),
+     }),
+@@ -458,43 +434,43 @@ def pex_pytest(name, srcs, deps=[], eggs=[], data=[],
+ 
+ def pex_repositories():
+   """Rules to be invoked from WORKSPACE for remote dependencies."""
+-  native.http_file(
++  http_file(
+       name = 'pytest_whl',
+-      url = 'https://pypi.python.org/packages/c4/bf/80d1cd053b1c86f6ecb23300fba3a7c572419b5edc155da0f3f104d42775/pytest-3.0.2-py2.py3-none-any.whl',
++      urls = ['https://pypi.python.org/packages/c4/bf/80d1cd053b1c86f6ecb23300fba3a7c572419b5edc155da0f3f104d42775/pytest-3.0.2-py2.py3-none-any.whl'],
+       sha256 = '4b0872d00159dd8d7a27c4a45a2be77aac8a6e70c3af9a7c76c040c3e3715b9d'
+   )
+ 
+-  native.http_file(
++  http_file(
+       name = 'py_whl',
+-      url = 'https://pypi.python.org/packages/19/f2/4b71181a49a4673a12c8f5075b8744c5feb0ed9eba352dd22512d2c04d47/py-1.4.31-py2.py3-none-any.whl',
++      urls = ['https://pypi.python.org/packages/19/f2/4b71181a49a4673a12c8f5075b8744c5feb0ed9eba352dd22512d2c04d47/py-1.4.31-py2.py3-none-any.whl'],
+       sha256 = '4a3e4f3000c123835ac39cab5ccc510642153bc47bc1f13e2bbb53039540ae69'
+   )
+ 
+-  native.http_file(
++  http_file(
+       name = "wheel_src",
+-      url = "https://pypi.python.org/packages/c9/1d/bd19e691fd4cfe908c76c429fe6e4436c9e83583c4414b54f6c85471954a/wheel-0.29.0.tar.gz",
++      urls = ["https://pypi.python.org/packages/c9/1d/bd19e691fd4cfe908c76c429fe6e4436c9e83583c4414b54f6c85471954a/wheel-0.29.0.tar.gz"],
+       sha256 = "1ebb8ad7e26b448e9caa4773d2357849bf80ff9e313964bcaf79cbf0201a1648",
+   )
+ 
+-  native.http_file(
++  http_file(
+       name = "setuptools_src",
+-      url = "https://pypi.python.org/packages/d3/16/21cf5dc6974280197e42d57bf7d372380562ec69aef9bb796b5e2dbbed6e/setuptools-20.10.1.tar.gz",
++      urls = ["https://pypi.python.org/packages/d3/16/21cf5dc6974280197e42d57bf7d372380562ec69aef9bb796b5e2dbbed6e/setuptools-20.10.1.tar.gz"],
+       sha256 = "3e59c885f09ed0d631816468e431b347b5103339e77a21cbf56df6283319b5dd",
+   )
+ 
+-  native.http_file(
++  http_file(
+       name = "pex_src",
+-      url = "https://pypi.python.org/packages/6d/b9/aacedca314f7061f84c021c9eaac9ceac9c57f277e4e9bbb6d998facec8d/pex-1.1.14.tar.gz",
++      urls = ["https://pypi.python.org/packages/6d/b9/aacedca314f7061f84c021c9eaac9ceac9c57f277e4e9bbb6d998facec8d/pex-1.1.14.tar.gz"],
+       sha256 = "2d0f5ec39d61c0ef0f806247d7e2702e5354583df7f232db5d9a3b287173e857",
+   )
+ 
+-  native.http_file(
++  http_file(
+       name = "requests_src",
+-      url = "https://pypi.python.org/packages/2e/ad/e627446492cc374c284e82381215dcd9a0a87c4f6e90e9789afefe6da0ad/requests-2.11.1.tar.gz",
++      urls = ["https://pypi.python.org/packages/2e/ad/e627446492cc374c284e82381215dcd9a0a87c4f6e90e9789afefe6da0ad/requests-2.11.1.tar.gz"],
+       sha256 = "5acf980358283faba0b897c73959cecf8b841205bb4b2ad3ef545f46eae1a133",
+   )
+ 
+-  native.new_http_archive(
++  http_archive(
+       name = "virtualenv",
+       url = "https://pypi.python.org/packages/5c/79/5dae7494b9f5ed061cff9a8ab8d6e1f02db352f3facf907d9eb614fb80e9/virtualenv-15.0.2.tar.gz",
+       sha256 = "fab40f32d9ad298fba04a260f3073505a16d52539a84843cf8c8369d4fd17167",
+diff --git a/pex/wrapper/pex_wrapper.py b/pex/wrapper/pex_wrapper.py
+index 739cff9..7575417 100644
+--- a/pex/wrapper/pex_wrapper.py
++++ b/pex/wrapper/pex_wrapper.py
+@@ -3,6 +3,8 @@
+ 
+ import pex.bin.pex as pexbin
+ from pex.common import safe_delete
++from pex.pex_builder import CopyMode
++from pex.resolve import requirement_options, resolver_options, target_options
+ from pex.tracer import TRACER
+ from pex.variables import ENV
+ 
+@@ -37,30 +39,41 @@ def parse_manifest(manifest_text):
+     return json.loads(manifest_text)
+ 
+ 
++class Requirements(object):
++    def __init__(self, requirements):
++        self.requirements = requirements
++        self.requirement_files = []
++        self.constraint_files = []
++
++
+ def main():
+-    pparser, resolver_options_builder = pexbin.configure_clp()
+-    poptions, args = pparser.parse_args(sys.argv)
++    pparser = pexbin.configure_clp()
++    pparser.add_argument("--manifest")
++
++    print(sys.argv)
+ 
+-    manifest_file = args[1]
++    poptions = pparser.parse_args(sys.argv)
++
++    manifest_file = poptions.manifest
+     manifest_text = open(manifest_file, 'r').read()
+     manifest = parse_manifest(manifest_text)
+ 
+-    if poptions.pex_root:
+-        ENV.set('PEX_ROOT', poptions.pex_root)
+-    else:
+-        poptions.pex_root = ENV.PEX_ROOT
+-
+-    if poptions.cache_dir:
+-        poptions.cache_dir = pexbin.make_relative_to_root(poptions.cache_dir)
+-    poptions.interpreter_cache_dir = pexbin.make_relative_to_root(
+-        poptions.interpreter_cache_dir)
++    if not poptions.pex_root:
++        if ENV.PEX_ROOT:
++            poptions.pex_root = ENV.PEX_ROOT
++        else:
++            poptions.pex_root = ".pex"
+ 
+-    reqs = manifest.get('requirements', [])
++    req_options = Requirements(manifest.get('requirements', []))
+ 
+-    with ENV.patch(PEX_VERBOSE=str(poptions.verbosity)):
++    with ENV.patch(PEX_VERBOSE=str(poptions.verbosity), PEX_ROOT=poptions.pex_root):
+         with TRACER.timed('Building pex'):
+-            pex_builder = pexbin.build_pex(reqs, poptions,
+-                                           resolver_options_builder)
++            pex_builder = pexbin.build_pex(
++                    requirement_configuration=requirement_options.configure(req_options),
++                    resolver_configuration=resolver_options.configure(poptions),
++                    target_configuration=target_options.configure(poptions),
++                    options=poptions,
++                    cache=poptions.pex_root)
+ 
+         # Add source files from the manifest
+         for modmap in manifest.get('modules', []):
+@@ -75,11 +88,10 @@ def main():
+             try:
+                 pex_builder.add_source(dereference_symlinks(src), dst)
+             except OSError as err:
+-                # Maybe we just can't use hardlinks? Try again.
+-                if not pex_builder._copy:
+-                    pex_builder._copy = True
++                try:
++                    pex_builder._copy_mode = CopyMode.COPY
+                     pex_builder.add_source(dereference_symlinks(src), dst)
+-                else:
++                except OSError as err:
+                     raise RuntimeError("Failed to add %s: %s" % (src, err))
+ 
+         # Add resources from the manifest
+@@ -98,7 +110,7 @@ def main():
+         # TODO(mikekap): Do something about manifest['nativeLibraries'].
+ 
+         pexbin.log('Saving PEX file to %s' % poptions.pex_name,
+-                   v=poptions.verbosity)
++                   V=poptions.verbosity)
+         tmp_name = poptions.pex_name + '~'
+         safe_delete(tmp_name)
+         pex_builder.build(tmp_name)
+diff --git a/tools/build_rules/prelude_bazel b/tools/build_rules/prelude_bazel
+deleted file mode 100644
+index d88ffd2..0000000
+--- a/tools/build_rules/prelude_bazel
++++ /dev/null
+@@ -1,16 +0,0 @@
+-# vim: set ft=bzl
+-
+-load(
+-    "@io_bazel_skydoc//skylark:skylark.bzl",
+-    "skydoc_repositories",
+-    "skylark_library",
+-    "skylark_doc",
+-)
+-
+-load(
+-    "@//pex:pex_rules.bzl",
+-    "pex_binary",
+-    "pex_library",
+-    "pex_test",
+-    "pex_pytest",
+-)

@@ -53,3 +53,20 @@ http_archive(
 )
 load("@rules_pkg//:deps.bzl", "rules_pkg_dependencies")
 rules_pkg_dependencies()
+
+http_archive(
+    name = "io_bazel_rules_pex",
+    strip_prefix = "bazel_rules_pex-0.3.0",
+    urls = [
+        "https://github.com/benley/bazel_rules_pex/archive/refs/tags/0.3.0.tar.gz",
+    ],
+    sha256 = "25b203ed474f1e8d4060a00dee1bcefb9ec487c817b868a315ccbe8ca3b08a9f",
+    patch_args = [
+	"-p1",
+    ],
+    patches = [
+	"//third_party:pex.patch",
+    ],
+)
+load("@io_bazel_rules_pex//pex:pex_rules.bzl", "pex_repositories")
+pex_repositories()
