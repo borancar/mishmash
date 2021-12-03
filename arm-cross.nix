@@ -1,6 +1,5 @@
-let crossPkgs = pkgs.pkgsCross.aarch64-multiplatform;
-    haskellNix = import (builtins.fetchTarball https://github.com/input-output-hk/haskell.nix/archive/0d781c04c4ab9045a165bacf428b043995a167f6.tar.gz) {};
-    pkgs = import haskellNix.sources.nixpkgs haskellNix.nixpkgsArgs;
+let pkgs = import <nixpkgs> {};
+    crossPkgs = pkgs.pkgsCross.aarch64-multiplatform;
     crossGCC = crossPkgs.buildPackages.gcc;
     crossGCCUnwrapped = crossPkgs.buildPackages.gcc-unwrapped;
     crossBinutils = crossPkgs.buildPackages.binutils;
