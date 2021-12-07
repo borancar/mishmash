@@ -23,15 +23,21 @@ fi
 When inside the directory, just run `pdm install` and you're ready to run the
 app with `python app.py`.
 
-## Bazel PEX Python2
+## Bazel
 
-If you want to build a Python2 pex file, run:
+If you want to build a Python zip file with all dependencies, run:
 
 ```
-bazel build //python_pdm_example:app --host_force_python=PY2
+bazel build //python_pdm_example:app --output_groups=python_zip_file
+```
+
+or just
+
+```
+bazel build //python_pdm_example:app_zip
 ```
 
 You can run the resulting file as:
 ```
-bazel-bin/python_pdm_example/app
+python bazel-bin/python_pdm_example/app.zip
 ```

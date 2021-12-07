@@ -1,12 +1,18 @@
-load("@io_bazel_rules_pex//pex:pex_rules.bzl", "pex_binary", "pex_library", "pex_test", "pex_pytest")
+load("@rules_python//python:defs.bzl", "py_binary")
+load("@python_deps//:requirements.bzl", "requirement")
 
-pex_binary(
+py_binary(
     name = "app",
     srcs = [
         "app.py",
-	"__init__.py",
     ],
-    reqs = [
-	"flask",
+    deps = [
+        requirement("flask"),
     ],
+)
+
+filegroup(
+    name = "app_zip",
+    srcs = [":app"],
+    output_group = "python_zip_file",
 )
