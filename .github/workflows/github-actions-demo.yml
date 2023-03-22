@@ -15,4 +15,4 @@ jobs:
         nix-env -iA bintoolsNoLibc gnum4 autoconf -f '<nixpkgs>'
     # Run a build
     - run: |
-        bazel build //server:server
+        bazel build //server:package
